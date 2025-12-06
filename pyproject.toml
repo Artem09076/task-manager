@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "tm"
+version = "0.1.0"
+description = ""
+authors = ["Artem09076 <grigoranartem592@yandex.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = {extras = ["standard"], version = "^0.124.0"}
+redis = "^7.1.0"
+unicorn = "^2.1.4"
+sqlalchemy = "^2.0.44"
+aio-pika = "^9.5.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
