@@ -3,60 +3,12 @@ from src.storage.db.model.models import User, Project, Task, Intergration, Event
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select
 
-class Repository:
+class TaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_user(self, username: str, email: str) -> User:
-        user = User(username=username, email=email)
-        try: 
-            self.db.add(user)
-            await self.db.commit()
-            await self.db.refresh(user)
-            return user
-        except SQLAlchemyError as e:
-            await self.db.rollback()
-            raise 
-        except Exception as e:
-            await self.db.rollback()
-            raise
-
-    async def get_user_by_id(self, user_id: str) -> User | None:
-        try:
-            res = await self.db.execute(select(User).where(User.id == user_id))
-            user = res.scalars().first()
-            return user
-        except SQLAlchemyError as e:
-            raise
-        except Exception as e:
-            raise
-    
-    async def create_project(self, name: str, owner_id: str) -> Project:
-        project = Project(name=name, owner_id=owner_id)
-        try:
-            self.db.add(project)
-            await self.db.commit()
-            await self.db.refresh(project)
-            return project
-        except SQLAlchemyError as e:
-            await self.db.rollback()
-            raise 
-        except Exception as e:
-            await self.db.rollback()
-            raise
-    
-    async def get_project_by_id(self, project_id: str) -> Project | None:
-        try:
-            res = await self.db.execute(select(Project).where(Project.id == project_id))
-            project = res.scalars().first()
-            return project
-        except SQLAlchemyError as e:
-            raise
-        except Exception as e:
-            raise
-    
-    async def create_task(self, project_id: str, title: str, description: str, created_by: str) -> Task:
-        task = Task(project_id=project_id, title=title, description=description, created_by=created_by)
+    async def create_task(self, project_id: str, title: str, description: str, source: str, external_id) -> Task:
+        task = Task(project_id=project_id, title=title, description=description, source=source, external_id=external_id)
         try:
             self.db.add(task)
             await self.db.commit()
@@ -69,60 +21,99 @@ class Repository:
             await self.db.rollback()
             raise
     
-    async def get_task_by_id(self, task_id: str) -> Task | None:
-        try:
-            res = await self.db.execute(select(Task).where(Task.id == task_id))
-            task = res.scalars().first()
-            return task
-        except SQLAlchemyError as e:
-            raise
-        except Exception as e:
-            raise
+    async def create_or_update_from_external(self, source: str, external_id: str, repo_full_name: str, title: str, description: str) -> Task:
+        intergration = await self.db.scalar(
+            select(Intergration)
+            .where(Intergration.type == source)
+            .where(Intergration.external_id == repo_full_name)
+            .where(Intergration.enabled == True)
+        )
+        if not intergration:
+            raise ValueError("No enabled integration found for the given source and repository.")
+        
+        project_id = intergration.project_id
+        
+        q = (
+            select(Task)
+            .where(Task.source == source)
+            .where(Task.external_id == external_id)
+        )
+
+        result = await self.db.execute(q)
+        task = result.scalar_one_or_none()
+        if not task:
+            task = await self.create_task(title=title, description=description, source=source, external_id=external_id, project_id=project_id)
+        else:
+            task.title = title
+            task.description = description
+        
+        await self.db.commit()
+        return task
+    async def update_status_from_external(self, repo_full_name: str, external_id: str, status) -> Task:
+        intergration = await self.db.scalar(
+            select(Intergration)
+            .where(Intergration.type == "github")
+            .where(Intergration.external_id == repo_full_name)
+            .where(Intergration.enabled == True)
+        )
+        if not intergration:
+            raise ValueError("No enabled integration found for the given source and repository.")
+        
+        q = (
+            select(Task)
+            .where(Task.source == "github")
+            .where(Task.external_id == external_id)
+        )
+
+        result = await self.db.execute(q)
+        task = result.scalar_one_or_none()
+        if not task:
+            raise ValueError("Task not found for the given external ID.")
+        
+        task.status = status
+        await self.db.commit()
+        return task
     
-    async def create_integration(self, project_id: str, type: str, external_id: str, config: dict) -> Intergration:
-        integration = Intergration(project_id=project_id, type=type, external_id=external_id, config=config)
-        try:
-            self.db.add(integration)
-            await self.db.commit()
-            await self.db.refresh(integration)
-            return integration
-        except SQLAlchemyError as e:
-            await self.db.rollback()
-            raise 
-        except Exception as e:
-            await self.db.rollback()
-            raise
+    async def delete_task_from_external(self, repo_full_name: str, external_id: str) -> None:
+        intergration = await self.db.scalar(
+            select(Intergration)
+            .where(Intergration.type == "github")
+            .where(Intergration.external_id == repo_full_name)
+            .where(Intergration.enabled == True)
+        )
+        if not intergration:
+            raise ValueError("No enabled integration found for the given source and repository.")
+        
+        q = (
+            select(Task)
+            .where(Task.source == "github")
+            .where(Task.external_id == external_id)
+        )
+
+        result = await self.db.execute(q)
+        task = result.scalar_one_or_none()
+        if not task:
+            raise ValueError("Task not found for the given external ID.")
+        
+        await self.db.delete(task)
+        await self.db.commit()
     
-    async def get_integration_by_id(self, integration_id: str) -> Intergration | None:
-        try:
-            res = await self.db.execute(select(Intergration).where(Intergration.id == integration_id))
-            integration = res.scalars().first()
-            return integration
-        except SQLAlchemyError as e:
-            raise
-        except Exception as e:
-            raise  
+
+class ProjectRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
     
-    async def create_event(self, task_id: str) -> Event:
-        event = Event(task_id=task_id)
-        try:
-            self.db.add(event)
-            await self.db.commit()
-            await self.db.refresh(event)
-            return event
-        except SQLAlchemyError as e:
-            await self.db.rollback()
-            raise 
-        except Exception as e:
-            await self.db.rollback()
-            raise
+
+class UserRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+class IntegrationRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+class EventRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
     
-    async def get_event_by_id(self, event_id: str) -> Event | None:
-        try:
-            res = await self.db.execute(select(Event).where(Event.id == event_id))
-            event = res.scalars().first()
-            return event
-        except SQLAlchemyError as e:
-            raise
-        except Exception as e:
-            raise

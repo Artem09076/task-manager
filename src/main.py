@@ -5,13 +5,14 @@ import logging
 import uvicorn
 from fastapi import FastAPI
 from src.storage.db.db import get_db
+from src.api.router import router
 
 
 
 
 def create_app() -> FastAPI:
     app = FastAPI(docs_url="/swagger")
-    # app.include_router(router)
+    app.include_router(router)
     return app
 
 
