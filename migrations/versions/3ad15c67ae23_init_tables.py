@@ -1,8 +1,8 @@
-"""Initial tables
+"""Init tables
 
-Revision ID: c7934e45feeb
+Revision ID: 3ad15c67ae23
 Revises: 
-Create Date: 2025-12-08 18:27:37.059797
+Create Date: 2025-12-11 16:27:33.540406
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c7934e45feeb'
+revision: str = '3ad15c67ae23'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,7 +24,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('username', sa.String(length=50), nullable=False),
     sa.Column('email', sa.String(length=100), nullable=False),
-    sa.Column('created_at', sa.String(length=50), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_users')),
     sa.UniqueConstraint('email', name=op.f('uq_users_email')),
     sa.UniqueConstraint('username', name=op.f('uq_users_username')),
@@ -34,7 +34,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('owner_id', sa.Uuid(), nullable=False),
-    sa.Column('created_at', sa.String(length=50), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['owner_id'], ['public.users.id'], name=op.f('fk_projects_owner_id_users')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_projects')),
     schema='public'
@@ -46,7 +46,7 @@ def upgrade() -> None:
     sa.Column('external_id', sa.String(length=100), nullable=False),
     sa.Column('config', sa.JSON(), nullable=False),
     sa.Column('enabled', sa.Boolean(), nullable=False),
-    sa.Column('created_at', sa.String(length=50), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['project_id'], ['public.projects.id'], name=op.f('fk_integrations_project_id_projects')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_integrations')),
     schema='public'
@@ -59,10 +59,8 @@ def upgrade() -> None:
     sa.Column('status', sa.Enum('TODO', 'IN_PROGRESS', 'COMPLETED', name='taskstatus'), nullable=False),
     sa.Column('source', sa.String(length=100), nullable=True),
     sa.Column('external_id', sa.String(length=100), nullable=True),
-    sa.Column('created_by', sa.Uuid(), nullable=False),
-    sa.Column('created_at', sa.String(length=50), nullable=False),
-    sa.Column('updated_at', sa.String(length=50), nullable=False),
-    sa.ForeignKeyConstraint(['created_by'], ['public.users.id'], name=op.f('fk_tasks_created_by_users')),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['project_id'], ['public.projects.id'], name=op.f('fk_tasks_project_id_projects')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_tasks')),
     schema='public'
@@ -72,7 +70,7 @@ def upgrade() -> None:
     sa.Column('task_id', sa.Uuid(), nullable=False),
     sa.Column('event_type', sa.String(length=100), nullable=False),
     sa.Column('payload', sa.JSON(), nullable=True),
-    sa.Column('created_at', sa.String(length=50), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['task_id'], ['public.tasks.id'], name=op.f('fk_events_task_id_tasks')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_events')),
     schema='public'
