@@ -126,3 +126,13 @@ class Repository:
             raise
         except Exception as e:
             raise
+    
+    async def get_user_by_username(self, username: str) -> User | None:
+        try:
+            res = await self.db.execute(select(User).where(User.username == username))
+            user = res.scalars().first()
+            return user
+        except SQLAlchemyError as e:
+            raise
+        except Exception as e:
+            raise
