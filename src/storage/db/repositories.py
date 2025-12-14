@@ -1,40 +1,126 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+from src.schemas.integration import IntegrationCreate, IntegrationUpdate
+from src.storage.db.model.models import Event, Integration
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession 
-from src.storage.db.model.models import User, Project, Task, Intergration, Event
+from src.storage.db.model.models import TaskStatus, User, Project, Task, Integration, Event
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select
 from uuid import UUID
 from datetime import datetime
 import uuid
 
+
 class TaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_task(self, project_id: str, title: str, description: str, source: str, external_id) -> Task:
-        task = Task(project_id=project_id, title=title, description=description, source=source, external_id=external_id)
-        try:
-            self.db.add(task)
-            await self.db.commit()
-            await self.db.refresh(task)
-            return task
-        except SQLAlchemyError as e:
-            await self.db.rollback()
-            raise 
-        except Exception as e:
-            await self.db.rollback()
-            raise
+    async def get_by_id(self, task_id: UUID) -> Task | None:
+        res = await self.db.execute(
+            select(Task).where(Task.id == task_id)
+        )
+        return res.scalar_one_or_none()
+
+    async def list(self) -> list[Task]:
+        res = await self.db.execute(select(Task))
+        return res.scalars().all()
+
+    async def create(
+        self,
+        project_id: UUID,
+        title: str,
+        description: str | None,
+        created_by: UUID,
+    ) -> Task:
+        task = Task(
+            id=uuid.uuid4(),
+            project_id=project_id,
+            title=title,
+            description=description,
+            status=TaskStatus.TODO,
+            created_by=created_by,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        self.db.add(task)
+        await self.db.flush()
+
+        event = Event(
+            id=uuid.uuid4(),
+            task_id=task.id,
+            event_type="TASK_CREATED",
+            payload={
+                "title": title,
+                "description": description,
+            },
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(event)
+
+        await self.db.commit()
+        await self.db.refresh(task)
+        return task
+
+    async def update(
+        self,
+        task: Task,
+        title: str | None = None,
+        description: str | None = None,
+        status: TaskStatus | None = None,
+    ) -> Task:
+        payload = {}
+
+        if title is not None:
+            task.title = title
+            payload["title"] = title
+
+        if description is not None:
+            task.description = description
+            payload["description"] = description
+
+        if status is not None:
+            task.status = status
+            payload["status"] = status.value
+
+        task.updated_at = datetime.utcnow()
+
+        event = Event(
+            id=uuid.uuid4(),
+            task_id=task.id,
+            event_type="TASK_UPDATED",
+            payload=payload,
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(event)
+
+        await self.db.commit()
+        await self.db.refresh(task)
+        return task
+
+    async def delete(self, task: Task) -> None:
+        event = Event(
+            id=uuid.uuid4(),
+            task_id=task.id,
+            event_type="TASK_DELETED",
+            payload=None,
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(event)
+
+        await self.db.delete(task)
+        await self.db.commit()
     
     async def create_or_update_from_external(self, source: str, external_id: str, repo_full_name: str, title: str, description: str) -> Task:
-        intergration = await self.db.scalar(
-            select(Intergration)
-            .where(Intergration.type == source)
-            .where(Intergration.external_id == repo_full_name)
-            .where(Intergration.enabled == True)
+        integration = await self.db.scalar(
+            select(Integration)
+            .where(Integration.type == source)
+            .where(Integration.external_id == repo_full_name)
+            .where(Integration.enabled == True)
         )
-        if not intergration:
+        if not integration:
             raise ValueError("No enabled integration found for the given source and repository.")
         
-        project_id = intergration.project_id
+        project_id = integration.project_id
         
         q = (
             select(Task)
@@ -46,20 +132,37 @@ class TaskRepository:
         task = result.scalar_one_or_none()
         if not task:
             task = await self.create_task(title=title, description=description, source=source, external_id=external_id, project_id=project_id)
+            event_type = "TASK_CREATED_FROM_EXTERNAL"
         else:
             task.title = title
             task.description = description
+            event_type = "TASK_UPDATED_FROM_EXTERNAL"
+        
+        await self.db.flush()
+        
+        event = Event(
+            id=uuid.uuid4(),
+            task_id=task.id,
+            event_type=event_type,
+            payload={
+                "source": source,
+                "external_id": external_id,
+            },
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(event)
         
         await self.db.commit()
         return task
+
     async def update_status_from_external(self, repo_full_name: str, external_id: str, status) -> Task:
-        intergration = await self.db.scalar(
-            select(Intergration)
-            .where(Intergration.type == "github")
-            .where(Intergration.external_id == repo_full_name)
-            .where(Intergration.enabled == True)
+        integration = await self.db.scalar(
+            select(Integration)
+            .where(Integration.type == "github")
+            .where(Integration.external_id == repo_full_name)
+            .where(Integration.enabled == True)
         )
-        if not intergration:
+        if not integration:
             raise ValueError("No enabled integration found for the given source and repository.")
         
         q = (
@@ -74,17 +177,28 @@ class TaskRepository:
             raise ValueError("Task not found for the given external ID.")
         
         task.status = status
+        await self.db.flush()
+
+        event = Event(
+            id=uuid.uuid4(),
+            task_id=task.id,
+            event_type="TASK_STATUS_UPDATED_FROM_EXTERNAL",
+            payload={"status": status.value},
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(event)
+        
         await self.db.commit()
         return task
     
     async def delete_task_from_external(self, repo_full_name: str, external_id: str) -> None:
-        intergration = await self.db.scalar(
-            select(Intergration)
-            .where(Intergration.type == "github")
-            .where(Intergration.external_id == repo_full_name)
-            .where(Intergration.enabled == True)
+        integration = await self.db.scalar(
+            select(Integration)
+            .where(Integration.type == "github")
+            .where(Integration.external_id == repo_full_name)
+            .where(Integration.enabled == True)
         )
-        if not intergration:
+        if not integration:
             raise ValueError("No enabled integration found for the given source and repository.")
         
         q = (
@@ -97,6 +211,16 @@ class TaskRepository:
         task = result.scalar_one_or_none()
         if not task:
             raise ValueError("Task not found for the given external ID.")
+        
+        event = Event(
+            id=uuid.uuid4(),
+            task_id=task.id,
+            event_type="TASK_DELETED_FROM_EXTERNAL",
+            payload=None,
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(event)
+        await self.db.flush()
         
         await self.db.delete(task)
         await self.db.commit()
@@ -207,10 +331,62 @@ class IntegrationRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def create(self, data: IntegrationCreate) -> Integration:
+        integration = Integration(**data.dict())
+        self.db.add(integration)
+        await self.db.commit()
+        await self.db.refresh(integration)
+        return integration
+
+    async def get_by_id(self, integration_id: UUID) -> Integration | None:
+        result = await self.db.execute(
+            select(Integration).where(Integration.id == integration_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_project(self, project_id: UUID) -> list[Integration]:
+        result = await self.db.execute(
+            select(Integration).where(Integration.project_id == project_id)
+        )
+        return result.scalars().all()
+
+    async def get_all(self) -> list[Integration]:
+        result = await self.db.execute(
+            select(Integration)
+        )
+        return result.scalars().all()
+
+    async def update(self, integration: Integration, data: IntegrationUpdate) -> Integration:
+        for key, value in data.dict(exclude_unset=True).items():
+            setattr(integration, key, value)
+
+        await self.db.commit()
+        await self.db.refresh(integration)
+        return integration
+
+    async def delete(self, integration: Integration):
+        await self.db.delete(integration)
+        await self.db.commit()
+
+
 class EventRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def get_by_id(self, event_id: UUID) -> Event | None:
+        res = await self.db.execute(
+            select(Event).where(Event.id == event_id)
+        )
+        return res.scalar_one_or_none()
+
+    async def get_by_task(self, task_id: UUID) -> list[Event]:
+        res = await self.db.execute(
+            select(Event)
+            .where(Event.task_id == task_id)
+            .order_by(Event.created_at.desc())
+        )
+        return res.scalars().all()
     
-   
-    
+    async def get_all(self):
+        result = await self.db.execute(select(Event).order_by(Event.created_at.desc()))
+        return result.scalars().all()

@@ -12,6 +12,9 @@ from src.logger import setup_logging
 from src.api.auth import router as auth_router
 from src.api.users import router as users_router
 from src.api.project import router as projects_router
+from src.api.tasks import router as tasks_router
+from src.api.events import router as events_router
+from src.api.integrations import router as integrations_router
 
 
 def create_app() -> FastAPI:
@@ -22,6 +25,9 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(users_router)
     app.include_router(projects_router)
+    app.include_router(tasks_router) 
+    app.include_router(events_router)
+    app.include_router(integrations_router)
 
     return app
 

@@ -1,8 +1,8 @@
 from src.storage.db.model.meta import Base
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import DateTime, String, ForeignKey, JSON
+from sqlalchemy import DateTime, String, ForeignKey, JSON, Enum
 import enum
 import uuid
 
@@ -30,37 +30,72 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-class Intergration(Base):
+
+class Integration(Base):
     __tablename__ = "integrations"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id"),
+        nullable=False
+    )
     type: Mapped[str] = mapped_column(String(50), nullable=False)
-    external_id : Mapped[str] = mapped_column(String(100), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(100), nullable=False)
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
-    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)    
-    created_at: Mapped[DateTime] = mapped_column(String(50), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
 
 
 class Task(Base):
     __tablename__ = "tasks"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id"), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[str] = mapped_column(String(1000), nullable=True)
-    status: Mapped[TaskStatus] = mapped_column(nullable=False, default=TaskStatus.TODO)
-    source: Mapped[String] = mapped_column(String(100), nullable=True)
-    external_id: Mapped[String] = mapped_column(String(100), nullable=True)
-    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[DateTime] = mapped_column(String(50), nullable=False)
-    updated_at: Mapped[DateTime] = mapped_column(String(50), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(1000))
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus, name="taskstatus"),
+        nullable=False,
+        default=TaskStatus.TODO
+    )
+    source: Mapped[str | None] = mapped_column(String(100))
+    external_id: Mapped[str | None] = mapped_column(String(100))
+    created_by: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    events = relationship("Event", back_populates="task",
+                          cascade="all, delete")
 
 
 class Event(Base):
     __tablename__ = "events"
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    task_id: Mapped[UUID] = mapped_column(ForeignKey("tasks.id"), nullable=False)
+    task_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"),  # <-- добавляем CASCADE
+        nullable=False
+    )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[DateTime] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
+
+    task = relationship("Task", back_populates="events")
