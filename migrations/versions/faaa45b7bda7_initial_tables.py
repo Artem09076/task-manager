@@ -1,8 +1,8 @@
-"""Init tables
+"""Initial tables
 
-Revision ID: 3ad15c67ae23
+Revision ID: faaa45b7bda7
 Revises: 
-Create Date: 2025-12-11 16:27:33.540406
+Create Date: 2025-12-26 20:13:48.091193
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '3ad15c67ae23'
+revision: str = 'faaa45b7bda7'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -35,6 +35,7 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('owner_id', sa.Uuid(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('description', sa.String(length=500), nullable=True),
     sa.ForeignKeyConstraint(['owner_id'], ['public.users.id'], name=op.f('fk_projects_owner_id_users')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_projects')),
     schema='public'
@@ -71,7 +72,7 @@ def upgrade() -> None:
     sa.Column('event_type', sa.String(length=100), nullable=False),
     sa.Column('payload', sa.JSON(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['task_id'], ['public.tasks.id'], name=op.f('fk_events_task_id_tasks')),
+    sa.ForeignKeyConstraint(['task_id'], ['public.tasks.id'], name=op.f('fk_events_task_id_tasks'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_events')),
     schema='public'
     )

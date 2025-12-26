@@ -42,6 +42,9 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 30s
@@ -69,6 +72,43 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+  
+  celery_worker:
+    build: .
+    command: celery -A scheduler.calendar_scheduler worker --loglevel=info
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/code
+
+  celery_beat:
+    build: .
+    command: celery -A scheduler.calendar_scheduler beat --loglevel=info
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/code
+
+  worker:
+    build: .
+    command: uvicorn worker.web_app:create_app --host 0.0.0.0 --port 8010
+    ports:
+      - "8010:8010"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
         condition: service_healthy
 
 volumes:

@@ -17,6 +17,9 @@ class Settings(BaseSettings):
 
     GIT_SECRET: str
 
+    GOOGLE_SERVICE_ACCOUNT_JSON: str
+    GOOGLE_CALENDAR_SCOPES: str
+
     @property
     def db_url(self) -> str:
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"

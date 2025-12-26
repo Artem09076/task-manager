@@ -72,8 +72,6 @@ class Task(Base):
     )
     source: Mapped[str | None] = mapped_column(String(100))
     external_id: Mapped[str | None] = mapped_column(String(100))
-    created_by: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

@@ -224,6 +224,50 @@ class TaskRepository:
         
         await self.db.delete(task)
         await self.db.commit()
+
+    async def create_or_update_from_google_cal(self, *, project_id: UUID, source: str, external_id: str, title: str, description: str, status: TaskStatus) -> Task:
+        q = (
+            select(Task)
+            .where(Task.source == source)
+            .where(Task.external_id == external_id)
+            .where(Task.project_id == project_id)
+        )
+
+        result = await self.db.execute(q)
+
+        task = result.scalar_one_or_none()
+
+        if task:
+            task.title = title
+            task.description = description
+            task.status = status
+        else:
+            task = Task(
+                project_id=project_id,
+                title=title,
+                description=description,
+                status=status,
+                source=source,
+                external_id=external_id
+            )
+            self.db.add(task)
+        
+        await self.db.flush()
+        
+        event = Event(
+            id=uuid.uuid4(),
+            task_id=task.id,
+            event_type="google_calendar.sync",
+            payload={
+                "source": source,
+                "external_id": external_id,
+            },
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(event)
+        
+        await self.db.commit()
+        return task
         
 class ProjectRepository:
     def __init__(self, db: AsyncSession):
