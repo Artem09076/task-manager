@@ -30,7 +30,6 @@ class TaskRepository:
         project_id: UUID,
         title: str,
         description: str | None,
-        created_by: UUID,
     ) -> Task:
         task = Task(
             id=uuid.uuid4(),
@@ -38,7 +37,6 @@ class TaskRepository:
             title=title,
             description=description,
             status=TaskStatus.TODO,
-            created_by=created_by,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
