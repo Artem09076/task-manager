@@ -11,9 +11,7 @@ from src.api.dependencies import get_current_user
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
-# ---------------------------
-# CREATE (auth required)
-# ---------------------------
+
 @router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 async def create_task(
     data: TaskCreate,
