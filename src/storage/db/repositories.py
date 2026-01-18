@@ -25,6 +25,33 @@ class TaskRepository:
         res = await self.db.execute(select(Task))
         return res.scalars().all()
 
+    async def create_task(
+        self,
+        project_id: UUID,
+        title: str,
+        description: str | None = None,
+        source: str | None = None,
+        external_id: str | None = None,
+    ) -> Task:
+        task = Task(
+            project_id=project_id,
+            title=title,
+            description=description,
+            status=TaskStatus.TODO,
+            source=source,
+            external_id=external_id,
+        )
+        try:
+            self.db.add(task)
+            await self.db.commit()
+            await self.db.refresh(task)
+            return task
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            raise
     async def create(
         self,
         project_id: UUID,

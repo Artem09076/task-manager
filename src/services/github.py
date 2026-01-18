@@ -16,7 +16,7 @@ class GitHubService:
         if not issue:
             return Response(content="No issue data", status_code=400)
         git_repo = payload["repository"]["full_name"]
-        if action in ("opened", "edited", "reopened"):
+        if action == "opened":
             await self.task_repository.create_or_update_from_external(
                 source="github",
                 external_id=str(issue.get("id")),
@@ -29,6 +29,12 @@ class GitHubService:
                 repo_full_name=git_repo,
                 external_id=str(issue.get("id")),
                 status=TaskStatus.COMPLETED
+                )
+        elif action == "reopened":
+            await self.task_repository.update_status_from_external(
+                repo_full_name=git_repo,
+                external_id=str(issue.get("id")),
+                status=TaskStatus.IN_PROGRESS
                 )
         elif action == "deleted":
             await self.task_repository.delete_task_from_external(

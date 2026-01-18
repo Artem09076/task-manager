@@ -20,6 +20,6 @@ def schedule_calendar_sync():
 app.conf.beat_schedule = {
     "schedule-calendar-sync-every-5-minutes": {
         "task": "scheduler.calendar_scheduler.schedule_calendar_sync",
-        "schedule": 30.0, 
+        "schedule": 300.0, 
     },
 }
